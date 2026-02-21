@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+config.toml
+.pid
+.status.json
+connector.log
+.installing

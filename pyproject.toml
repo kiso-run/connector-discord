@@ -1,0 +1,21 @@
+[project]
+name = "connector-discord"
+version = "0.1.0"
+description = "Discord bridge for Kiso"
+requires-python = ">=3.11"
+dependencies = [
+    "discord.py>=2.3",
+    "httpx>=0.28",
+    "aiohttp>=3.9",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.25"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]

@@ -1,0 +1,19 @@
+# Kiso API endpoint (inside Docker, this is typically localhost)
+kiso_api = "http://localhost:8333"
+
+# Port for the webhook callback server (connector listens here for kiso responses)
+webhook_port = 9001
+
+# Webhook bind address (use 0.0.0.0 inside Docker)
+webhook_host = "0.0.0.0"
+
+# Bot trigger prefix: if set, only messages starting with this string are forwarded.
+# If empty, the bot responds to all messages in mapped channels.
+bot_prefix = ""
+
+# Map Discord channel IDs → kiso session names.
+# Only mapped channels are monitored. DMs are always monitored.
+# Format: "channel_id" = "session-name"
+[channels]
+# "1234567890123456789" = "discord-general"
+# "9876543210987654321" = "discord-dev"

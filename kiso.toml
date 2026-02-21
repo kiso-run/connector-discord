@@ -1,0 +1,15 @@
+[kiso]
+type = "connector"
+name = "discord"
+version = "0.1.0"
+description = "Discord bridge for Kiso"
+
+[kiso.connector]
+platform = "discord"
+
+[kiso.connector.env]
+bot_token = { required = true }
+kiso_token = { required = true }
+
+[kiso.deps]
+python = ">=3.11"
