@@ -40,6 +40,14 @@ kiso env set KISO_CONNECTOR_DISCORD_KISO_TOKEN "your-kiso-api-token"
 kiso env reload
 ```
 
+Optionally, set a shared secret so the connector verifies HMAC-SHA256 signatures on incoming webhook callbacks:
+
+```bash
+kiso env set KISO_CONNECTOR_DISCORD_WEBHOOK_SECRET "your-random-secret"
+```
+
+The same value must be configured in kiso's side. When set, requests with a missing or invalid `X-Kiso-Signature` header are rejected with HTTP 401.
+
 ### 3. Configure the kiso API token
 
 Add the token to `~/.kiso/config.toml`. The key name (`discord`) determines which `aliases.*` field is used for user resolution:
@@ -74,12 +82,22 @@ Edit `~/.kiso/connectors/discord/config.toml` and add channel IDs:
 kiso_api = "http://localhost:8333"
 webhook_port = 9001
 webhook_host = "0.0.0.0"
+webhook_address = "http://localhost:9001"
 bot_prefix = ""
 
 [channels]
 "1234567890123456789" = "discord-general"
 "9876543210987654321" = "discord-dev"
 ```
+
+| Key | Description |
+|-----|-------------|
+| `kiso_api` | URL of the kiso HTTP API |
+| `webhook_port` | Port the connector's callback server binds to |
+| `webhook_host` | Bind address for the callback server (`0.0.0.0` for all interfaces) |
+| `webhook_address` | URL kiso uses to reach this connector — set to the connector's externally reachable address (see [Docker](#docker)) |
+| `bot_prefix` | Optional message prefix filter (empty = respond to all messages) |
+| `[channels]` | Discord channel ID → kiso session name mapping |
 
 To find a channel ID: enable **Developer Mode** in Discord settings, then right-click the channel → *Copy Channel ID*.
 
@@ -133,8 +151,8 @@ connector: channel.send(response)
 Discord channel / DM
 ```
 
-- **Webhook**: kiso POSTs to `http://connector-host:9001/callback` after each `msg` task.
-- **Polling fallback**: if no webhook arrives within 30 s, the connector polls `GET /status/{session}` every 5 s until `final=true` or the worker goes idle.
+- **Webhook**: kiso POSTs to `{webhook_address}/callback` after each `msg` task.
+- **Polling fallback**: if no webhook arrives within 30 s, the connector polls `GET /status/{session}` every 5 s until a task with `final=true` is received.
 
 ---
 
@@ -158,16 +176,27 @@ With this set, only messages starting with `!kiso ` are forwarded (the prefix is
 
 ## Docker
 
-Expose the webhook port in your `docker-compose.yml`:
+Expose the webhook port and set the correct `webhook_address` in your `docker-compose.yml`:
 
 ```yaml
 services:
   kiso:
     ports:
       - "9001:9001"
+  connector-discord:
+    environment:
+      - KISO_CONNECTOR_DISCORD_BOT_TOKEN=...
+      - KISO_CONNECTOR_DISCORD_KISO_TOKEN=...
 ```
 
-Make sure `webhook_host = "0.0.0.0"` in `config.toml` so the server binds to all interfaces.
+In `config.toml`, bind the callback server to all interfaces and point `webhook_address` at the connector's hostname as seen by kiso (typically the Docker service name):
+
+```toml
+webhook_host = "0.0.0.0"
+webhook_address = "http://connector-discord:9001"
+```
+
+If both kiso and the connector run on the same host (no separate containers), the default `http://localhost:9001` works without changes.
 
 ---
 
@@ -180,6 +209,7 @@ Make sure `webhook_host = "0.0.0.0"` in `config.toml` so the server binds to all
 
 **Webhook failures / responses not arriving**
 - Ensure port 9001 is exposed and reachable from the kiso container.
+- Check that `webhook_address` in `config.toml` points to the connector's address as seen by kiso (not `localhost` if running in separate containers).
 - Look for `Webhook server listening` in the logs on startup.
 
 **Messages accepted but not processed**
