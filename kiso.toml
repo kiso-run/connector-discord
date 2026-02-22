@@ -10,6 +10,7 @@ platform = "discord"
 [kiso.connector.env]
 bot_token = { required = true }
 kiso_token = { required = true }
+webhook_secret = { required = false }
 
 [kiso.deps]
 python = ">=3.11"

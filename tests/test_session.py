@@ -79,11 +79,15 @@ class TestConnectorChannelMap:
 # ---------------------------------------------------------------------------
 
 class TestPollingFallback:
-    async def test_polling_stops_on_final_true(self, connector):
-        """Polling loop exits when worker is idle."""
+    async def test_polling_stops_on_final_true(self, connector, monkeypatch):
+        """Polling loop exits when a task with final:true is received."""
+        import run
+        monkeypatch.setattr(run, "POLLING_INTERVAL_SECONDS", 0)
+
         from run import PendingSession
 
         pending = PendingSession(session="discord-general")
+        pending.webhook_received.set()  # skip Phase 1 (not testing the 30s wait here)
         connector.pending["discord-general"] = pending
 
         mock_channel = AsyncMock()
@@ -96,16 +100,17 @@ class TestPollingFallback:
             call_count += 1
             return {
                 "tasks": [
-                    {"id": call_count, "type": "msg", "output": f"Response {call_count}"}
+                    {
+                        "id": call_count,
+                        "type": "msg",
+                        "output": f"Response {call_count}",
+                        "final": call_count >= 2,
+                    }
                 ],
-                "worker_running": call_count < 2,
-                "active_task": None,
-                "queue_length": 0,
             }
 
         connector.poll_status = mock_poll
 
-        # Trigger timeout immediately (no webhook received)
         await asyncio.wait_for(
             connector.polling_fallback("discord-general"),
             timeout=5.0,
@@ -114,11 +119,15 @@ class TestPollingFallback:
         assert pending.final_received is True
         assert mock_channel.send.call_count >= 1
 
-    async def test_polling_skips_already_delivered_tasks(self, connector):
+    async def test_polling_skips_already_delivered_tasks(self, connector, monkeypatch):
         """Tasks with id <= last_task_id must not be re-delivered."""
+        import run
+        monkeypatch.setattr(run, "POLLING_INTERVAL_SECONDS", 0)
+
         from run import PendingSession
 
         pending = PendingSession(session="discord-general", last_task_id=10)
+        pending.webhook_received.set()  # skip Phase 1
         connector.pending["discord-general"] = pending
 
         mock_channel = AsyncMock()
@@ -128,11 +137,8 @@ class TestPollingFallback:
             return {
                 "tasks": [
                     {"id": 5, "type": "msg", "output": "Old"},
-                    {"id": 10, "type": "msg", "output": "Old too"},
+                    {"id": 10, "type": "msg", "output": "Old too", "final": True},
                 ],
-                "worker_running": False,
-                "active_task": None,
-                "queue_length": 0,
             }
 
         connector.poll_status = mock_poll
@@ -172,11 +178,15 @@ class TestPollingFallback:
 
         assert not poll_called
 
-    async def test_polling_updates_last_task_id(self, connector):
+    async def test_polling_updates_last_task_id(self, connector, monkeypatch):
         """last_task_id must advance with each delivered task."""
+        import run
+        monkeypatch.setattr(run, "POLLING_INTERVAL_SECONDS", 0)
+
         from run import PendingSession
 
         pending = PendingSession(session="discord-general")
+        pending.webhook_received.set()  # skip Phase 1
         connector.pending["discord-general"] = pending
 
         mock_channel = AsyncMock()
@@ -185,15 +195,9 @@ class TestPollingFallback:
         responses = [
             {
                 "tasks": [{"id": 1, "type": "msg", "output": "First"}],
-                "worker_running": True,
-                "active_task": {"id": 2},
-                "queue_length": 0,
             },
             {
-                "tasks": [{"id": 2, "type": "msg", "output": "Second"}],
-                "worker_running": False,
-                "active_task": None,
-                "queue_length": 0,
+                "tasks": [{"id": 2, "type": "msg", "output": "Second", "final": True}],
             },
         ]
         iter_responses = iter(responses)
@@ -202,12 +206,7 @@ class TestPollingFallback:
             try:
                 return next(iter_responses)
             except StopIteration:
-                return {
-                    "tasks": [],
-                    "worker_running": False,
-                    "active_task": None,
-                    "queue_length": 0,
-                }
+                return {"tasks": []}
 
         connector.poll_status = mock_poll
 

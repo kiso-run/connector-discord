@@ -179,6 +179,9 @@ class DiscordConnector:
         self.kiso_api: str = config.get("kiso_api", "http://localhost:8333").rstrip("/")
         self.webhook_port: int = int(config.get("webhook_port", 9001))
         self.webhook_host: str = config.get("webhook_host", "0.0.0.0")
+        self.webhook_address: str = config.get(
+            "webhook_address", f"http://localhost:{self.webhook_port}"
+        )
         self.bot_prefix: str = config.get("bot_prefix", "")
         # Normalise channel map keys to strings (TOML integer keys → str)
         self.channel_map: dict[str, str] = {
@@ -203,7 +206,7 @@ class DiscordConnector:
 
     async def register_session(self, session: str, description: str) -> bool:
         """Register a session with kiso and provide our webhook URL."""
-        webhook_url = f"http://localhost:{self.webhook_port}/callback"
+        webhook_url = f"{self.webhook_address}/callback"
         try:
             resp = await self.http.post(
                 f"{self.kiso_api}/sessions",
@@ -330,21 +333,17 @@ class DiscordConnector:
                 if task.get("type") != "msg":
                     continue
                 task_id = int(task.get("id", 0))
-                if task_id <= pending.last_task_id:
-                    continue
-                output = str(task.get("output", ""))
-                if output:
-                    await self.deliver_to_discord(session, output)
-                pending.last_task_id = task_id
-
-            worker_done = (
-                not data.get("worker_running")
-                and data.get("active_task") is None
-                and int(data.get("queue_length", 0)) == 0
-            )
-            if worker_done:
-                log.info("Polling complete for session=%s (worker idle)", session)
-                pending.final_received = True
+                if task_id > pending.last_task_id:
+                    output = str(task.get("output", ""))
+                    if output:
+                        await self.deliver_to_discord(session, output)
+                    pending.last_task_id = task_id
+                if task.get("final"):
+                    log.info(
+                        "Polling complete for session=%s (final task received)", session
+                    )
+                    pending.final_received = True
+                    break
 
     # ------------------------------------------------------------------
     # Webhook server (receives responses from kiso)

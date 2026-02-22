@@ -7,6 +7,10 @@ webhook_port = 9001
 # Webhook bind address (use 0.0.0.0 inside Docker)
 webhook_host = "0.0.0.0"
 
+# Address kiso uses to reach this connector's webhook server.
+# Change this when kiso runs on a different host or inside a container network.
+webhook_address = "http://localhost:9001"
+
 # Bot trigger prefix: if set, only messages starting with this string are forwarded.
 # If empty, the bot responds to all messages in mapped channels.
 bot_prefix = ""
