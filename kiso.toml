@@ -8,9 +8,9 @@ description = "Discord bridge for Kiso"
 platform = "discord"
 
 [kiso.connector.env]
-bot_token = { required = true, description = "Discord bot token — create at discord.com/developers/applications → New Application → Bot → Reset Token" }
-kiso_token = { required = true, description = "Kiso API token — any token listed under [users] in ~/.kiso/config.toml, or the deploy token in [tokens]" }
-webhook_secret = { required = false, description = "Webhook signature secret — any random string, e.g.: openssl rand -hex 32" }
+bot_token = { required = true, description = "Discord bot token — go to discord.com/developers/applications, open your app (or create one), go to Bot, click Reset Token and copy the token. Also enable Message Content Intent under Privileged Gateway Intents." }
+kiso_token = { required = true, description = "Kiso auth token for the connector — run `grep -A1 'token' ~/.kiso/config.toml` on the kiso server and copy a token value. This is how the connector authenticates with kiso when forwarding messages." }
+webhook_secret = { required = false, description = "Optional: a random secret to verify that webhook calls are coming from kiso. Generate one with: openssl rand -hex 32. Leave empty to skip verification." }
 
 [kiso.deps]
 python = ">=3.11"
