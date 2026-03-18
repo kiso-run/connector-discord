@@ -42,9 +42,9 @@ Discord msg → _handle_message → forward_message (POST /msg)
 | Message splitting | Done | Paragraph-aware, hard split fallback |
 | Graceful shutdown | Done | SIGTERM/SIGINT handlers, cleanup chain |
 | Unit test suite | Done | 51 passing, 8 skipped (integration) |
-| Connector method tests | Pending | M6 |
-| Functional (subprocess) tests | Pending | M7 |
-| Shutdown lifecycle tests | Pending | M8 |
+| Connector method tests | Done | M6 |
+| Functional (subprocess) tests | Done | M7 |
+| Shutdown lifecycle tests | Done | M8 |
 
 ## Milestones
 
@@ -107,38 +107,38 @@ New tests to cover `DiscordConnector` methods and edge cases not exercised by th
 
 **tests/test_connector.py (new file):**
 
-- [ ] `__init__` defaults — verify `webhook_port=9001`, `kiso_api` trailing slash stripped, `channel_map` normalization, `bot_prefix` default empty
-- [ ] `__init__` custom config — non-default webhook_port, webhook_host, webhook_address, bot_prefix
-- [ ] `register_session` success (200) — returns True, correct POST body (session, webhook, description)
-- [ ] `register_session` success (201) — returns True
-- [ ] `register_session` failure (500) — returns False, logs error
-- [ ] `register_session` network error — httpx exception, returns False, logs error
-- [ ] `forward_message` success (202) — returns JSON body with expected fields
-- [ ] `forward_message` failure (400) — returns None, logs error
-- [ ] `forward_message` untrusted user — returns JSON with `untrusted: true`
-- [ ] `forward_message` network error — httpx exception, returns None
-- [ ] `poll_status` success (200) — returns JSON with tasks list
-- [ ] `poll_status` failure (404) — returns None, logs warning
-- [ ] `poll_status` network error — httpx exception, returns None
-- [ ] `deliver_to_discord` no channel mapped — logs error, returns without sending
-- [ ] `deliver_to_discord` message exceeds limit — calls split_message, sends multiple parts
-- [ ] `deliver_to_discord` discord send failure — logs error, stops sending remaining parts
-- [ ] `_handle_message` ignore bot messages — message.author.bot=True, no forwarding
-- [ ] `_handle_message` ignore own messages — message.author == bot.user, no forwarding
-- [ ] `_handle_message` unmapped channel — non-DM channel not in channel_map, silently ignored
-- [ ] `_handle_message` DM creates dynamic session — registers session, maps channel
-- [ ] `_handle_message` prefix filtering — message without prefix ignored, with prefix forwarded (prefix stripped)
-- [ ] `_handle_message` empty content after prefix strip — ignored
-- [ ] `_handle_message` untrusted user response — no PendingSession created, no polling started
+- [x] `__init__` defaults — verify `webhook_port=9001`, `kiso_api` trailing slash stripped, `channel_map` normalization, `bot_prefix` default empty
+- [x] `__init__` custom config — non-default webhook_port, webhook_host, webhook_address, bot_prefix
+- [x] `register_session` success (200) — returns True, correct POST body (session, webhook, description)
+- [x] `register_session` success (201) — returns True
+- [x] `register_session` failure (500) — returns False, logs error
+- [x] `register_session` network error — httpx exception, returns False, logs error
+- [x] `forward_message` success (202) — returns JSON body with expected fields
+- [x] `forward_message` failure (400) — returns None, logs error
+- [x] `forward_message` untrusted user — returns JSON with `untrusted: true`
+- [x] `forward_message` network error — httpx exception, returns None
+- [x] `poll_status` success (200) — returns JSON with tasks list
+- [x] `poll_status` failure (404) — returns None, logs warning
+- [x] `poll_status` network error — httpx exception, returns None
+- [x] `deliver_to_discord` no channel mapped — logs error, returns without sending
+- [x] `deliver_to_discord` message exceeds limit — calls split_message, sends multiple parts
+- [x] `deliver_to_discord` discord send failure — logs error, stops sending remaining parts
+- [x] `_handle_message` ignore bot messages — message.author.bot=True, no forwarding
+- [x] `_handle_message` ignore own messages — message.author == bot.user, no forwarding
+- [x] `_handle_message` unmapped channel — non-DM channel not in channel_map, silently ignored
+- [x] `_handle_message` DM creates dynamic session — registers session, maps channel
+- [x] `_handle_message` prefix filtering — message without prefix ignored, with prefix forwarded (prefix stripped)
+- [x] `_handle_message` empty content after prefix strip — ignored
+- [x] `_handle_message` untrusted user response — no PendingSession created, no polling started
 
 **tests/test_webhook.py (additions):**
 
-- [ ] `handle_callback` with webhook secret set but empty `X-Kiso-Signature` header — returns 401
-- [ ] `handle_callback` valid signature with content delivery — verify channel.send called with correct content
+- [x] `handle_callback` with webhook secret set but empty `X-Kiso-Signature` header — returns 401 (already covered by existing test)
+- [x] `handle_callback` valid signature with content delivery — verify channel.send called with correct content (already covered by existing test)
 
 **tests/test_config.py (addition):**
 
-- [ ] Malformed TOML file (binary garbage) — `load_config` raises `tomllib.TOMLDecodeError` (or exits)
+- [x] Malformed TOML file (binary garbage) — `load_config` raises parsing error
 
 ### M7 — Functional tests (subprocess contract)
 
@@ -146,11 +146,11 @@ Start `run.py` as a subprocess and verify early-exit error conditions. These tes
 
 **tests/test_functional.py (new file):**
 
-- [ ] Missing `config.toml` — exits with code 1, stderr contains "config.toml not found"
-- [ ] Missing `KISO_CONNECTOR_DISCORD_BOT_TOKEN` — exits with code 1, stderr contains env var name
-- [ ] Missing `KISO_CONNECTOR_DISCORD_KISO_TOKEN` — exits with code 1, stderr contains env var name
-- [ ] Both env vars missing — exits with code 1, first missing var reported
-- [ ] Corrupt `config.toml` (binary content) — exits with non-zero code
+- [x] Missing `config.toml` — exits with code 1, stdout contains "config.toml not found"
+- [x] Missing `KISO_CONNECTOR_DISCORD_BOT_TOKEN` — exits with code 1, stdout contains env var name
+- [x] Missing `KISO_CONNECTOR_DISCORD_KISO_TOKEN` — exits with code 1, stdout contains env var name
+- [x] Both env vars missing — exits with code 1, first missing var reported
+- [x] Corrupt `config.toml` (binary content) — exits with non-zero code
 
 ### M8 — SIGTERM/SIGINT graceful shutdown test
 
@@ -158,9 +158,9 @@ Verify the connector shuts down cleanly when receiving termination signals.
 
 **tests/test_shutdown.py (new file):**
 
-- [ ] SIGTERM triggers clean shutdown — `bot.close()` called, webhook server stopped, httpx client closed
-- [ ] `shutdown()` sets `_shutdown` flag — polling loops exit
-- [ ] `shutdown()` is idempotent — calling twice does not raise
+- [x] SIGTERM triggers clean shutdown — `bot.close()` called, webhook server stopped, httpx client closed
+- [x] `shutdown()` sets `_shutdown` flag — polling loops exit
+- [x] `shutdown()` is idempotent — calling twice does not raise
 
 ## Milestone Checklist
 
@@ -171,9 +171,9 @@ Verify the connector shuts down cleanly when receiving termination signals.
 | M3 — Session/channel mapping + DM support | ✅ Done |
 | M4 — Webhook signature verification | ✅ Done |
 | M5 — Test suite | ✅ Done |
-| M6 — Missing unit test coverage | ⬜ Pending |
-| M7 — Functional tests (subprocess contract) | ⬜ Pending |
-| M8 — SIGTERM/SIGINT graceful shutdown test | ⬜ Pending |
+| M6 — Missing unit test coverage | ✅ Done |
+| M7 — Functional tests (subprocess contract) | ✅ Done |
+| M8 — SIGTERM/SIGINT graceful shutdown test | ✅ Done |
 
 ## Known Issues
 

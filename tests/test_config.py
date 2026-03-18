@@ -1,5 +1,6 @@
 """Tests for configuration loading and environment variable validation."""
 import os
+import tomllib
 import pytest
 from pathlib import Path
 from unittest.mock import patch
@@ -91,3 +92,13 @@ def test_load_env_empty_kiso_token(monkeypatch):
     from run import load_env
     with pytest.raises(SystemExit):
         load_env()
+
+
+def test_load_config_malformed_toml(tmp_path):
+    """Binary garbage should raise a parsing error (TOMLDecodeError or UnicodeDecodeError)."""
+    config_file = tmp_path / "config.toml"
+    config_file.write_bytes(b"\x00\x01\x02\xff\xfe\xfd")
+
+    from run import load_config
+    with pytest.raises((tomllib.TOMLDecodeError, UnicodeDecodeError)):
+        load_config(config_file)
