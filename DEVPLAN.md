@@ -175,6 +175,17 @@ Verify the connector shuts down cleanly when receiving termination signals.
 | M7 — Functional tests (subprocess contract) | ✅ Done |
 | M8 — SIGTERM/SIGINT graceful shutdown test | ✅ Done |
 
+## History (from core plugins.md)
+
+### File upload support ✅
+- [x] `_download_attachments()` — downloads Discord attachments to uploads/
+- [x] Filename collision handling, 25MB size limit, error handling
+- [x] `_handle_message()` appends `[Uploaded files: ...]` to content
+- [x] Unit tests: single, oversized, collision, multiple, download error
+
+### Compliance cleanup ✅
+- [x] Added empty deps.sh
+
 ## Known Issues
 
 - **No reconnection logic** — if the Discord gateway drops the connection, `discord.py` handles reconnection internally, but there is no explicit retry logic for kiso API failures beyond logging.
