@@ -40,9 +40,11 @@ log = logging.getLogger("connector.discord")
 # Constants
 # ---------------------------------------------------------------------------
 CONFIG_PATH = Path(__file__).parent / "config.toml"
+KISO_DIR = Path.home() / ".kiso"
 DISCORD_MAX_LENGTH = 2000
 POLLING_WAIT_SECONDS = 30
 POLLING_INTERVAL_SECONDS = 5
+MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024  # 25 MB
 
 
 # ---------------------------------------------------------------------------
@@ -249,6 +251,41 @@ class DiscordConnector:
                 type(exc).__name__,
             )
             return None
+
+    async def _download_attachments(
+        self, session: str, attachments: list[discord.Attachment],
+    ) -> list[str]:
+        """Download Discord attachments to the session uploads/ directory (M3).
+
+        Returns list of saved filenames. Skips files exceeding MAX_ATTACHMENT_SIZE.
+        """
+        uploads_dir = KISO_DIR / "sessions" / session / "uploads"
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+        saved: list[str] = []
+        for att in attachments:
+            if att.size > MAX_ATTACHMENT_SIZE:
+                log.warning(
+                    "Skipping attachment %s (%d bytes, max %d)",
+                    att.filename, att.size, MAX_ATTACHMENT_SIZE,
+                )
+                continue
+            # Handle filename collisions
+            dest = uploads_dir / att.filename
+            if dest.exists():
+                stem = dest.stem
+                suffix = dest.suffix
+                counter = 1
+                while dest.exists():
+                    dest = uploads_dir / f"{stem}_{counter}{suffix}"
+                    counter += 1
+            try:
+                data = await att.read()
+                dest.write_bytes(data)
+                saved.append(dest.name)
+                log.info("Saved attachment: %s → %s", att.filename, dest)
+            except Exception as exc:
+                log.error("Failed to download attachment %s: %s", att.filename, exc)
+        return saved
 
     async def poll_status(self, session: str, after: int = 0) -> dict | None:
         """Poll kiso for pending tasks. Returns status JSON or None on error."""
@@ -488,6 +525,12 @@ class DiscordConnector:
             if not content.startswith(self.bot_prefix):
                 return
             content = content[len(self.bot_prefix) :].lstrip()
+
+        # M3: download attachments to uploads/
+        if message.attachments:
+            saved = await self._download_attachments(session, message.attachments)
+            if saved:
+                content += "\n\n[Uploaded files: " + ", ".join(saved) + "]"
 
         if not content.strip():
             return

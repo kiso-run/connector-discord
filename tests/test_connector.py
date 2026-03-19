@@ -404,3 +404,63 @@ class TestHandleMessage:
         session = connector.channel_map.get(str(msg.channel.id))
         assert session is not None
         assert session in connector.pending
+
+
+# ---------------------------------------------------------------------------
+# _download_attachments (M3)
+# ---------------------------------------------------------------------------
+
+class TestDownloadAttachments:
+    def _make_attachment(self, filename="image.png", size=1024, data=b"fakedata"):
+        att = MagicMock(spec=["filename", "size", "read"])
+        att.filename = filename
+        att.size = size
+        att.read = AsyncMock(return_value=data)
+        return att
+
+    @pytest.mark.asyncio
+    async def test_downloads_single_attachment(self, connector, tmp_path):
+        with patch("run.KISO_DIR", tmp_path):
+            att = self._make_attachment()
+            saved = await connector._download_attachments("test-sess", [att])
+        assert saved == ["image.png"]
+        assert (tmp_path / "sessions" / "test-sess" / "uploads" / "image.png").exists()
+        assert (tmp_path / "sessions" / "test-sess" / "uploads" / "image.png").read_bytes() == b"fakedata"
+
+    @pytest.mark.asyncio
+    async def test_skips_oversized_attachment(self, connector, tmp_path):
+        with patch("run.KISO_DIR", tmp_path):
+            att = self._make_attachment(size=30 * 1024 * 1024)  # 30 MB
+            saved = await connector._download_attachments("test-sess", [att])
+        assert saved == []
+        att.read.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handles_filename_collision(self, connector, tmp_path):
+        with patch("run.KISO_DIR", tmp_path):
+            uploads = tmp_path / "sessions" / "test-sess" / "uploads"
+            uploads.mkdir(parents=True)
+            (uploads / "file.txt").write_text("existing")
+            att = self._make_attachment(filename="file.txt", data=b"new")
+            saved = await connector._download_attachments("test-sess", [att])
+        assert saved == ["file_1.txt"]
+        assert (uploads / "file_1.txt").read_bytes() == b"new"
+        assert (uploads / "file.txt").read_text() == "existing"
+
+    @pytest.mark.asyncio
+    async def test_multiple_attachments(self, connector, tmp_path):
+        with patch("run.KISO_DIR", tmp_path):
+            att1 = self._make_attachment(filename="a.png", data=b"aaa")
+            att2 = self._make_attachment(filename="b.pdf", data=b"bbb")
+            saved = await connector._download_attachments("test-sess", [att1, att2])
+        assert len(saved) == 2
+        assert "a.png" in saved
+        assert "b.pdf" in saved
+
+    @pytest.mark.asyncio
+    async def test_download_error_skips_file(self, connector, tmp_path):
+        with patch("run.KISO_DIR", tmp_path):
+            att = self._make_attachment()
+            att.read = AsyncMock(side_effect=Exception("network error"))
+            saved = await connector._download_attachments("test-sess", [att])
+        assert saved == []
