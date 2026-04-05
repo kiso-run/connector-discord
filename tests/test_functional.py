@@ -148,3 +148,28 @@ class TestMissingEnvVars:
         )
 
         assert result.returncode != 0
+
+    def test_invalid_config_fails_fast(self, tmp_path):
+        """Invalid config.toml exits 1 with a config validation error."""
+        config = tmp_path / "config.toml"
+        config.write_text('webhook_port = 70000\n[channels]\n')
+
+        run_copy = tmp_path / "run.py"
+        run_copy.write_text(Path(RUN_PY).read_text())
+
+        result = subprocess.run(
+            [sys.executable, str(run_copy)],
+            capture_output=True,
+            text=True,
+            env={
+                "PATH": os.environ.get("PATH", ""),
+                "HOME": "/tmp",
+                "KISO_CONNECTOR_DISCORD_BOT_TOKEN": "valid-bot-token",
+                "KISO_CONNECTOR_DISCORD_KISO_TOKEN": "valid-token",
+            },
+            cwd=str(tmp_path),
+            timeout=5,
+        )
+
+        assert result.returncode == 1
+        assert "Invalid config.toml" in result.stdout

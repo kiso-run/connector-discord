@@ -1,9 +1,9 @@
 """Tests for configuration loading and environment variable validation."""
 import os
 import tomllib
-import pytest
 from pathlib import Path
-from unittest.mock import patch
+
+import pytest
 
 
 def test_load_config_valid(tmp_path):
@@ -44,6 +44,31 @@ def test_load_config_missing_file(tmp_path):
     with pytest.raises(SystemExit) as exc_info:
         load_config(tmp_path / "nonexistent.toml")
     assert exc_info.value.code == 1
+
+
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [
+        (b'webhook_port = 70000\n[channels]\n', "webhook_port"),
+        (b'kiso_api = "ftp://localhost"\n[channels]\n', "kiso_api"),
+        (b'webhook_address = "http://localhost:9001?x=1"\n[channels]\n', "webhook_address"),
+        (b'bot_prefix = 123\n[channels]\n', "bot_prefix"),
+        (b'channels = []\n', "[channels]"),
+        (b'[channels]\n"abc" = "discord-general"\n', "numeric Discord channel ID"),
+        (b'[channels]\n"123" = ""\n', "non-empty session name"),
+        (b'[channels]\n"123" = "bad session"\n', "invalid session name"),
+    ],
+)
+def test_load_config_invalid_values(tmp_path, content, expected, caplog):
+    config_file = tmp_path / "config.toml"
+    config_file.write_bytes(content)
+
+    from run import load_config
+
+    with pytest.raises(SystemExit) as exc_info:
+        load_config(config_file)
+    assert exc_info.value.code == 1
+    assert expected in caplog.text
 
 
 def test_load_env_valid(monkeypatch):

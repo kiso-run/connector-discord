@@ -53,6 +53,11 @@ class TestConnectorInit:
         assert c.bot_prefix == "!kiso "
         assert c.kiso_token == "my-token"
 
+    def test_webhook_address_trailing_slash_stripped(self):
+        config = {"webhook_address": "https://public.example.com:5555/"}
+        c = DiscordConnector(config, kiso_token="tok")
+        assert c.webhook_address == "https://public.example.com:5555"
+
 
 # ---------------------------------------------------------------------------
 # register_session

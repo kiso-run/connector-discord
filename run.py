@@ -15,11 +15,13 @@ import hmac
 import json
 import logging
 import os
+import re
 import signal
 import sys
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlparse
 
 import discord
 import httpx
@@ -45,6 +47,7 @@ DISCORD_MAX_LENGTH = 2000
 POLLING_WAIT_SECONDS = 30
 POLLING_INTERVAL_SECONDS = 5
 MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024  # 25 MB
+_SESSION_RE = re.compile(r"^[A-Za-z0-9_@.\-]{1,255}$")
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +63,79 @@ def load_config(path: Path = CONFIG_PATH) -> dict:
         )
         sys.exit(1)
     with open(path, "rb") as fh:
-        return tomllib.load(fh)
+        config = tomllib.load(fh)
+    validate_config(config)
+    return config
+
+
+def validate_config(config: dict) -> None:
+    """Validate config.toml shape and fail fast with actionable errors."""
+    if not isinstance(config, dict):
+        _config_error("config.toml root must be a TOML table")
+
+    channels = config.get("channels", {})
+    if not isinstance(channels, dict):
+        _config_error("[channels] must be a table of Discord channel ID -> session name")
+    for channel_id, session in channels.items():
+        channel_text = str(channel_id)
+        if not channel_text.isdigit():
+            _config_error(f"[channels] key {channel_id!r} must be a numeric Discord channel ID")
+        if not isinstance(session, str) or not session.strip():
+            _config_error(f"[channels].{channel_text} must map to a non-empty session name")
+        if not _SESSION_RE.fullmatch(session.strip()):
+            _config_error(
+                f"[channels].{channel_text} has invalid session name {session!r} "
+                "(allowed: letters, digits, _, -, ., @)"
+            )
+
+    webhook_port = config.get("webhook_port", 9001)
+    try:
+        webhook_port_int = int(webhook_port)
+    except (TypeError, ValueError):
+        _config_error("webhook_port must be an integer between 1 and 65535")
+    if not (1 <= webhook_port_int <= 65535):
+        _config_error("webhook_port must be an integer between 1 and 65535")
+
+    webhook_host = config.get("webhook_host", "0.0.0.0")
+    if not isinstance(webhook_host, str) or not webhook_host.strip():
+        _config_error("webhook_host must be a non-empty string")
+
+    bot_prefix = config.get("bot_prefix", "")
+    if not isinstance(bot_prefix, str):
+        _config_error("bot_prefix must be a string")
+
+    _validate_http_url("kiso_api", config.get("kiso_api", "http://localhost:8333"))
+    _validate_http_url(
+        "webhook_address",
+        config.get("webhook_address", f"http://localhost:{webhook_port_int}"),
+        allow_query=False,
+        allow_fragment=False,
+    )
+
+
+def _validate_http_url(
+    name: str,
+    value: object,
+    *,
+    allow_query: bool = True,
+    allow_fragment: bool = True,
+) -> None:
+    """Validate that a config value is an http/https URL."""
+    if not isinstance(value, str) or not value.strip():
+        _config_error(f"{name} must be a non-empty http(s) URL")
+    parsed = urlparse(value.strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        _config_error(f"{name} must be a valid http(s) URL")
+    if not allow_query and parsed.query:
+        _config_error(f"{name} must not include a query string")
+    if not allow_fragment and parsed.fragment:
+        _config_error(f"{name} must not include a URL fragment")
+
+
+def _config_error(message: str) -> None:
+    """Log a startup config error and exit 1."""
+    log.error("Invalid config.toml: %s", message)
+    sys.exit(1)
 
 
 def load_env() -> tuple[str, str]:
@@ -183,7 +258,7 @@ class DiscordConnector:
         self.webhook_host: str = config.get("webhook_host", "0.0.0.0")
         self.webhook_address: str = config.get(
             "webhook_address", f"http://localhost:{self.webhook_port}"
-        )
+        ).rstrip("/")
         self.bot_prefix: str = config.get("bot_prefix", "")
         # Normalise channel map keys to strings (TOML integer keys → str)
         self.channel_map: dict[str, str] = {
